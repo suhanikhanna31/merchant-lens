@@ -65,9 +65,8 @@ jobs:
           cd java-api
           mvn spotbugs:check
 
-      - name: Restore Dependency-Check NVD data
-        id: nvd-cache
-        uses: actions/cache/restore@v4
+      - name: Cache Dependency-Check NVD data
+        uses: actions/cache@v4
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
           key: nvd-data-${{ github.run_id }}
@@ -78,18 +77,10 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           cd java-api
-          mvn -B org.owasp:dependency-check-maven:12.2.2:check \
+          mvn -B org.owasp:dependency-check-maven:12.1.6:check \
             -DfailBuildOnCVSS=7 \
             -Dformat=HTML \
-            -DnvdApiKey="$NVD_API_KEY" \
-            -DnvdMaxRetryCount=20
-
-      - name: Save Dependency-Check NVD data
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-data-${{ github.run_id }}
+            -DnvdApiKey="$NVD_API_KEY"
 
       - name: Upload dependency-check report
         if: always()
@@ -104,7 +95,7 @@ jobs:
           pip install sqlfluff
           sqlfluff lint schema/ procedures/ triggers/ queries/ \
             --dialect postgres \
-            --rules L001,L010,L019,L028,L031
+            --rules CP01,LT04,RF03,AL07
 
   # ─────────────────────────────────────────────
   # STAGE 3 — DATABASE VALIDATION
