@@ -299,12 +299,25 @@ jobs:
         run: chmod -R a+rwx "$GITHUB_WORKSPACE"
 
       - name: Run OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.10.0
+        run: |
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:8080 \
+            -c .zap/rules.tsv \
+            -a \
+            -r report_html.html \
+            -J report_json.json
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          target: 'http://localhost:8080'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a'
-          allow_issue_writing: false
+          name: zap-report
+          path: |
+            report_html.html
+            report_json.json
+          if-no-files-found: warn
 
       - name: Show API log on failure
         if: failure()
