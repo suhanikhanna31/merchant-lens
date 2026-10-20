@@ -272,12 +272,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      # The staging host is internal and unreachable from GitHub-hosted runners,
+      # so build the API and scan it on the runner itself.
+      - name: Build and start the API
+        run: |
+          cd java-api
+          mvn -B -DskipTests package
+          nohup java -jar target/merchantlens-api-*.jar --server.port=8080 > ../app.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8080/actuator/health > /dev/null; then
+              echo "API is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::API did not start in time"; cat ../app.log; exit 1
+
+      # The ZAP container runs as a non-root user and must be able to write here.
+      - name: Make workspace writable for ZAP
+        run: chmod -R a+rwx "$GITHUB_WORKSPACE"
+
       - name: Run OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
-          target: 'http://staging.merchantlens.internal'
+          target: 'http://localhost:8080'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          allow_issue_writing: false
+
+      - name: Show API log on failure
+        if: failure()
+        run: cat app.log
 
   # ─────────────────────────────────────────────
   # STAGE 7 — DEPLOY (main branch only)
