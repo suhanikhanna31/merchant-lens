@@ -81,7 +81,8 @@ jobs:
           mvn -B org.owasp:dependency-check-maven:12.2.2:check \
             -DfailBuildOnCVSS=7 \
             -Dformat=HTML \
-            -DnvdApiKey="$NVD_API_KEY"
+            -DnvdApiKey="$NVD_API_KEY" \
+            -DnvdMaxRetryCount=20
 
       - name: Save Dependency-Check NVD data
         if: always()
