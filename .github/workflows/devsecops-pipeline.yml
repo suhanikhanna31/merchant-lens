@@ -307,7 +307,13 @@ jobs:
             -c .zap/rules.tsv \
             -a \
             -r report_html.html \
-            -J report_json.json
+            -J report_json.json \
+            || code=$?
+          # zap-baseline exit codes: 0 = clean, 1 = FAIL findings, 2 = warnings only, 3 = scan error.
+          # Warnings are reported in the artifact but must not break the pipeline.
+          code=${code:-0}
+          echo "ZAP exit code: $code"
+          if [ "$code" -eq 1 ] || [ "$code" -ge 3 ]; then exit "$code"; fi
 
       - name: Upload ZAP report
         if: always()
