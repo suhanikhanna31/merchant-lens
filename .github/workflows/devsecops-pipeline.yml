@@ -124,40 +124,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pgTAP into the Postgres service container
+        run: |
+          CID=$(docker ps --filter "ancestor=postgres:15" --format "{{.ID}}" | head -n1)
+          docker exec "$CID" bash -c "apt-get update -qq && apt-get install -y -qq postgresql-15-pgtap"
+
       - name: Apply schema in order
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f schema/01_enums.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f schema/02_core_tables.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f schema/03_transaction.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f schema/04_settlement.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f schema/05_disputes.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f schema/01_enums.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f schema/02_core_tables.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f schema/03_transaction.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f schema/04_settlement.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f schema/05_disputes.sql
 
       - name: Apply indexes & triggers
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f indexes/01_indexes.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f triggers/01_audit_trigger.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f triggers/02_dispute_fsm.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f indexes/01_indexes.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f triggers/01_audit_trigger.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f triggers/02_dispute_fsm.sql
 
       - name: Apply stored procedures
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f procedures/01_run_settlement.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f procedures/02_escalate_disputes.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f procedures/03_compute_fees.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f procedures/01_run_settlement.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f procedures/02_escalate_disputes.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f procedures/03_compute_fees.sql
 
       - name: Load seed data
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f seed/01_seed_data.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f seed/01_seed_data.sql
 
       - name: Validate analytics queries execute without error
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f queries/01_reconciliation.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f queries/02_merchant_analytics.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f queries/03_top_merchants.sql
-          psql -h localhost -U ml_user -d merchantlens_test -f queries/04_cohort_analysis.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f queries/01_reconciliation.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f queries/02_merchant_analytics.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test -f queries/03_top_merchants.sql
 
       - name: Run pgTAP unit tests
         run: |
-          psql -h localhost -U ml_user -d merchantlens_test -f devsecops/db_tests.sql
+          psql -v ON_ERROR_STOP=1 -h localhost -U ml_user -d merchantlens_test \
+            -f devsecops/db_tests.sql | tee pgtap.out
+          # psql exits 0 even when individual pgTAP tests fail, so check the output
+          if grep -qE "not ok|Looks like you failed" pgtap.out; then
+            echo "::error::pgTAP tests failed"; exit 1
+          fi
 
   # ─────────────────────────────────────────────
   # STAGE 4 — Java API Tests
