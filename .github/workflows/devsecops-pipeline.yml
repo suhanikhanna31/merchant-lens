@@ -104,13 +104,15 @@ jobs:
     name: DB Schema & Migration Validation
     runs-on: ubuntu-latest
     needs: sast
+    env:
+      PGPASSWORD: ci_only_password
     services:
       postgres:
         image: postgres:15
         env:
           POSTGRES_DB: merchantlens_test
           POSTGRES_USER: ml_user
-          POSTGRES_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+          POSTGRES_PASSWORD: ci_only_password  # throwaway CI database, not a real secret
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -124,7 +126,6 @@ jobs:
 
       - name: Apply schema in order
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f schema/01_enums.sql
           psql -h localhost -U ml_user -d merchantlens_test -f schema/02_core_tables.sql
           psql -h localhost -U ml_user -d merchantlens_test -f schema/03_transaction.sql
@@ -133,26 +134,22 @@ jobs:
 
       - name: Apply indexes & triggers
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f indexes/01_indexes.sql
           psql -h localhost -U ml_user -d merchantlens_test -f triggers/01_audit_trigger.sql
           psql -h localhost -U ml_user -d merchantlens_test -f triggers/02_dispute_fsm.sql
 
       - name: Apply stored procedures
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f procedures/01_run_settlement.sql
           psql -h localhost -U ml_user -d merchantlens_test -f procedures/02_escalate_disputes.sql
           psql -h localhost -U ml_user -d merchantlens_test -f procedures/03_compute_fees.sql
 
       - name: Load seed data
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f seed/01_seed_data.sql
 
       - name: Validate analytics queries execute without error
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f queries/01_reconciliation.sql
           psql -h localhost -U ml_user -d merchantlens_test -f queries/02_merchant_analytics.sql
           psql -h localhost -U ml_user -d merchantlens_test -f queries/03_top_merchants.sql
@@ -160,7 +157,6 @@ jobs:
 
       - name: Run pgTAP unit tests
         run: |
-          export PGPASSWORD=${{ secrets.DB_TEST_PASSWORD }}
           psql -h localhost -U ml_user -d merchantlens_test -f devsecops/db_tests.sql
 
   # ─────────────────────────────────────────────
