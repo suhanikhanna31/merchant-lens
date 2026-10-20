@@ -1,0 +1,2 @@
+# ZAP baseline rules file. Format (tab-separated): <rule-id>	<IGNORE|WARN|FAIL>	<comment>
+# Add a line per rule you want to downgrade or enforce. Empty means ZAP defaults.
