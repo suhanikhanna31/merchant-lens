@@ -213,34 +213,53 @@ jobs:
     name: Salesforce Metadata Validation
     runs-on: ubuntu-latest
     needs: java-test
+    env:
+      SF_AUTH_URL: ${{ secrets.SF_AUTH_URL }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
 
-      - name: Authenticate to Salesforce sandbox
+      # Static analysis needs no org, so it always runs.
+      - name: Run Code Analyzer (PMD) on Apex
         run: |
-          echo "${{ secrets.SF_AUTH_URL }}" | sf org login sfdx-url \
-            --sfdx-url-stdin \
+          sf plugins install code-analyzer
+          sf code-analyzer run \
+            --workspace salesforce/force-app \
+            --rule-selector pmd \
+            --severity-threshold 3
+
+      # Org-dependent steps only run when the SF_AUTH_URL secret is configured.
+      - name: Check for Salesforce credentials
+        id: sfcreds
+        run: |
+          if [ -n "$SF_AUTH_URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SF_AUTH_URL secret not set - skipping org authentication and check-only deploy."
+          fi
+
+      - name: Authenticate to Salesforce sandbox
+        if: steps.sfcreds.outputs.available == 'true'
+        run: |
+          AUTH_FILE="$(mktemp)"
+          printf '%s' "$SF_AUTH_URL" > "$AUTH_FILE"
+          sf org login sfdx-url \
+            --sfdx-url-file "$AUTH_FILE" \
             --alias merchantlens-sandbox \
             --set-default
+          rm -f "$AUTH_FILE"
 
       - name: Validate Apex classes (check-only deploy)
+        if: steps.sfcreds.outputs.available == 'true'
         run: |
+          cd salesforce
           sf project deploy validate \
-            --source-dir salesforce/force-app \
+            --source-dir force-app \
             --target-org merchantlens-sandbox \
             --test-level RunLocalTests
-
-      - name: Run PMD Apex static analysis
-        run: |
-          npm install -g @salesforce/cli-plugin-scanner
-          sf scanner run \
-            --target "salesforce/force-app/**/*.cls" \
-            --engine pmd \
-            --severity-threshold 3 \
-            --format table
 
   # ─────────────────────────────────────────────
   # STAGE 6 — DAST (Dynamic Application Security Testing)
