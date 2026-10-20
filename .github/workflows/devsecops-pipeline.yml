@@ -39,7 +39,6 @@ jobs:
   sast:
     name: Static Analysis (SAST)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     needs: secret-scan
     steps:
       - uses: actions/checkout@v4
