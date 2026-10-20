@@ -1,0 +1,42 @@
+name: MerchantLens Dashboard CI
+
+# Standalone workflow: it does not touch ci.yml or devsecops-pipeline.yml, and
+# only runs when dashboard code (or the trigger the dashboard mirrors) changes.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'dashboard/**'
+      - 'triggers/02_dispute_fsm.sql'
+      - '.github/workflows/dashboard-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - 'triggers/02_dispute_fsm.sql'
+      - '.github/workflows/dashboard-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-test:
+    name: Dashboard (JavaScript) - Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No dependencies to install: the dashboard uses only Node built-ins.
+      - name: Syntax check
+        run: |
+          for f in dashboard/src/*.js dashboard/server.mjs; do
+            node --check "$f"
+          done
+
+      - name: Run unit tests (includes FSM drift check against the SQL trigger)
+        working-directory: dashboard
+        run: npm test

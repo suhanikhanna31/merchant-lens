@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'">
+  <title>MerchantLens Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>MerchantLens</h1>
+    <p class="sub">Disputes and chargeback ratios</p>
+
+    <section class="controls" aria-label="Controls">
+      <label>JWT (kept in memory only)
+        <input id="token" type="password" autocomplete="off" placeholder="Leave empty for demo data">
+      </label>
+      <button id="reload" type="button">Load</button>
+    </section>
+    <p id="message" class="message" role="status"></p>
+
+    <section aria-labelledby="h-stats"><h2 id="h-stats">Overview</h2><div id="stats" class="stats"></div></section>
+    <section aria-labelledby="h-summary"><h2 id="h-summary">Chargeback ratio</h2><div id="summary"></div></section>
+
+    <section aria-labelledby="h-disputes">
+      <h2 id="h-disputes">Disputes</h2>
+      <div class="filters">
+        <label>Status
+          <select id="status-filter"><option value="">All</option></select>
+        </label>
+        <label>Merchant
+          <input id="merchant-filter" type="search" placeholder="e.g. M-02">
+        </label>
+      </div>
+      <div id="disputes"></div>
+    </section>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

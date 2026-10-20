@@ -1,6 +1,6 @@
 # MerchantLens: Merchant Settlement & Analytics Database
 
-A PostgreSQL project for payment settlement reconciliation, merchant analytics and chargeback lifecycle management, with a small Java REST API, a Salesforce Apex sync and a CI/CD pipeline around it.
+A PostgreSQL project for payment settlement reconciliation, merchant analytics and chargeback lifecycle management, with a small Java REST API, a zero-dependency JavaScript dashboard, a Salesforce Apex sync and a CI/CD pipeline around it.
 
 All data in this repository is **synthetic seed data** generated for the project. Nothing here has processed real payments.
 
@@ -10,10 +10,11 @@ Settlement and chargeback work in payments tends to fail in the same few places.
 
 | Problem | What MerchantLens does |
 |---|---|
-| Chargeback status can be changed to an invalid state | A `BEFORE UPDATE` trigger enforces the lifecycle `RECEIVED → UNDER_REVIEW → WON / LOST / ARBITRATION`, so no service or manual `psql` session can skip a step |
+| Chargeback status can be changed to an invalid state | A `BEFORE UPDATE` trigger enforces the lifecycle (`RECEIVED → UNDER_REVIEW → EVIDENCE_SUBMITTED → WON / LOST / ARBITRATION`, plus `WITHDRAWN` from the early states), so no service or manual `psql` session can skip a step |
 | No record of who changed financial data | A trigger-based audit log on the financial tables, written by the database rather than by application code |
 | Chargeback ratios only noticed at month end | A rolling 7-day chargeback-ratio query per merchant with an alert flag |
 | Dispute analysts switching between tools | An Apex class syncs disputes into Salesforce Cases; a dispute reaching `ARBITRATION` raises the linked Case to `Escalated` |
+| Analysts need to see disputes and ratios at a glance | A JavaScript dashboard (`dashboard/`) lists disputes, shows the chargeback ratio per merchant and only offers *Escalate* where the lifecycle allows it |
 | Direct database access from other systems | A Spring Boot API sits in front of the database with JWT authentication and response DTOs, so internal entities are not exposed |
 
 ## Architecture
@@ -25,10 +26,10 @@ Settlement and chargeback work in payments tends to fail in the same few places.
 │              → DAST (main) → Deploy                              │
 └──────────────────────┬──────────────────────────────────────────┘
                        │
-         ┌─────────────▼──────────────┐
-         │   Java Spring Boot API      │  ← JWT auth, security headers
-         │   (DisputeController, etc.) │
-         └──────┬──────────┬──────────┘
+         ┌─────────────▼──────────────┐      ┌────────────────────────┐
+         │   Java Spring Boot API      │ ◄─── │ JS dashboard (browser) │
+         │   (DisputeController, etc.) │ JWT  │ via dev proxy          │
+         └──────┬──────────┬──────────┘      └────────────────────────┘
                 │          │
    ┌────────────▼──┐  ┌────▼────────────────┐
    │  PostgreSQL   │  │  Salesforce          │
@@ -40,9 +41,11 @@ Settlement and chargeback work in payments tends to fail in the same few places.
 ## Project structure
 
 ```
-pine-settlement-db/
+merchant-lens/
 ├── .github/workflows/
-│   └── devsecops-pipeline.yml    # 7-stage CI/CD pipeline
+│   ├── ci.yml                    # Quick schema + trigger smoke test
+│   ├── devsecops-pipeline.yml    # 7-stage CI/CD pipeline
+│   └── dashboard-ci.yml          # Dashboard tests (runs only when dashboard code changes)
 ├── schema/                       # PostgreSQL schema (12 tables, normalized to 3NF)
 ├── indexes/                      # Composite, partial and expression indexes
 ├── triggers/                     # Audit log + chargeback lifecycle trigger
@@ -55,6 +58,16 @@ pine-settlement-db/
 │       ├── service/DisputeService.java         # Business logic, database calls
 │       ├── model/DisputeResponse.java          # Response DTO
 │       └── security/SecurityConfig.java        # JWT, CORS, HSTS
+├── dashboard/                    # JavaScript dashboard (no dependencies, Node built-ins only)
+│   ├── index.html, styles.css
+│   ├── server.mjs                # Dev server + same-origin proxy to the API
+│   ├── src/
+│   │   ├── fsm.js                # Mirror of the dispute lifecycle trigger
+│   │   ├── api.js                # Fetch client for /api/v1/disputes
+│   │   ├── format.js, render.js  # Pure helpers + DOM rendering (textContent only)
+│   │   ├── demo-data.js          # Synthetic data for demo mode
+│   │   └── main.js               # Wiring
+│   └── test/                     # node:test unit tests (24 tests)
 ├── salesforce/force-app/main/default/classes/
 │   ├── MerchantDisputeSync.cls       # Apex callout → Salesforce Cases
 │   └── MerchantDisputeSyncTest.cls   # Apex tests with mock callouts
@@ -128,6 +141,31 @@ curl -H "Authorization: Bearer <jwt>" \
      http://localhost:8080/api/v1/disputes/summary
 ```
 
+### JavaScript dashboard
+
+Needs Node 22 or newer. There is nothing to `npm install`.
+
+```bash
+cd dashboard
+npm test                                   # 24 unit tests
+
+# Demo mode: synthetic data, no API needed
+npm start                                  # http://localhost:3000
+
+# Against the API: the dev server proxies /api to it, so CORS is not involved
+API_URL=http://localhost:8080 npm start    # then paste a JWT into the page
+```
+
+What it does:
+
+- Lists disputes with status and merchant filters, plus open/closed counts.
+- Shows the chargeback ratio per merchant, alerting merchants first.
+- Shows an **Escalate** button only for disputes in `EVIDENCE_SUBMITTED`, the only state the database allows to move to `ARBITRATION`. The API and the trigger still enforce this; the button just avoids offering an action that would fail.
+- Renders API data with `textContent`, never `innerHTML`. The page carries a strict Content-Security-Policy and the JWT is kept only in the input field, not in storage.
+- `dashboard/src/fsm.js` mirrors the lifecycle trigger, and a test parses `triggers/02_dispute_fsm.sql` and fails if the two ever differ.
+
+Demo mode is on whenever the JWT field is empty. The API's service layer is currently a stub that returns empty lists, so against the real API the dashboard will show no disputes until that is implemented.
+
 ### Salesforce
 
 Requires a Salesforce sandbox and a Named Credential that points at the API.
@@ -145,6 +183,9 @@ sf project deploy start \
 
 ## CI/CD pipeline (7 stages)
 
+The stages below are `devsecops-pipeline.yml`. `ci.yml` is a lighter schema and trigger smoke test, and `dashboard-ci.yml` runs the dashboard tests (a path filter limits it to changes under `dashboard/` or the lifecycle trigger). The dashboard workflow is separate on purpose, so it does not change any stage below.
+
+
 ```
 Push / PR
     │
@@ -155,16 +196,16 @@ Push / PR
     ▼
 [3] DB validation        Schema applied to an ephemeral Postgres, pgTAP tests run
     ▼
-[4] Java tests           Maven unit + integration tests, JaCoCo ≥ 70% gate
+[4] Java tests           Maven tests, JaCoCo coverage gate (threshold set by `jacoco.minimum` in pom.xml)
     ▼
 [5] Salesforce validate  SF CLI check-only deploy + PMD static analysis of Apex
     ▼
-[6] DAST (main only)     OWASP ZAP baseline scan against a staging URL
+[6] DAST (main only)     OWASP ZAP baseline scan against the API started on the runner
     ▼
 [7] Deploy               DB migrations, Docker image push, Salesforce metadata deploy, Slack notification
 ```
 
-The pipeline is set up to block a deploy when a stage fails: secret scan, SpotBugs, dependency vulnerabilities at CVSS 7 or above, coverage under 70%, PMD findings at severity 3 or worse, or ZAP findings.
+The pipeline is set up to block a deploy when a stage fails: secret scan, SpotBugs, dependency vulnerabilities at CVSS 7 or above, coverage under the `jacoco.minimum` threshold, PMD findings at severity 3 or worse, or ZAP findings.
 
 ## Design decisions
 
@@ -178,7 +219,9 @@ The pipeline is set up to block a deploy when a stage fails: secret scan, SpotBu
 
 - **Synthetic data only.** The seed data is generated; reported figures are not real merchant or payment data.
 - **Salesforce sync needs a sandbox.** It requires your own org, a Named Credential and an External ID field on Case, and it is not a hosted demo.
-- **DAST and deploy stages need configuration.** The ZAP scan needs a staging URL, and the deploy stage needs your registry, Salesforce and Slack secrets.
+- **The API's service layer is a stub.** Read endpoints return empty results, `escalate` answers 501, and the JWT filter does not yet authenticate anyone. The dashboard therefore ships with a demo mode.
+- **Coverage gate is wired, not yet strict.** `jacoco.minimum` in `java-api/pom.xml` is 0.00 because the Java API has no tests yet; raise it to 0.70 once they exist.
+- **Deploy stage needs configuration.** It needs your registry, Salesforce and Slack secrets.
 - **Rate limiting and rollback are not implemented.** Authentication, CORS and HSTS are in `SecurityConfig`; request throttling and automated rollback would be next steps.
 - **Not a production payment system.** It does not handle card data and has not been reviewed against PCI-DSS or RBI requirements.
 
@@ -187,7 +230,8 @@ The pipeline is set up to block a deploy when a stage fails: secret scan, SpotBu
 | Layer | Skill |
 |---|---|
 | Database | 12-table normalized schema, CTEs, window functions, PL/pgSQL procedures, triggers, partial indexes |
+| JavaScript | Dependency-free ES modules, `node:test` unit tests, safe DOM rendering, CSP, a same-origin dev proxy, a test that guards against drift from the SQL trigger |
 | Java | Spring Boot REST API, Spring Security (JWT, CORS, HSTS), DTO pattern, JaCoCo coverage gate |
 | Salesforce | Apex HTTP callouts, Named Credentials, `with sharing`, mock callouts in tests |
-| CI/CD | 7-stage GitHub Actions pipeline, SAST, DAST, pgTAP database tests, secret scanning |
+| CI/CD | 7-stage GitHub Actions pipeline plus a path-filtered dashboard workflow, SAST, DAST, pgTAP database tests, secret scanning |
 | Domain | Payments reconciliation, chargeback lifecycle, MDR fee computation, settlement lag analytics |

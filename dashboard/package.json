@@ -1,0 +1,14 @@
+{
+  "name": "merchantlens-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-dependency JavaScript dispute dashboard for the MerchantLens API",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
