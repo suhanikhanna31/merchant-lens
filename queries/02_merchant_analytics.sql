@@ -79,12 +79,12 @@ SELECT
     ROUND(AVG(
         EXTRACT(EPOCH FROM (c.settled_at - c.captured_at)) / 86400.0
     ), 2)                                                   AS avg_settlement_lag_days,
-    ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (
+    ROUND((PERCENTILE_CONT(0.50) WITHIN GROUP (
         ORDER BY EXTRACT(EPOCH FROM (c.settled_at - c.captured_at)) / 86400.0
-    ), 2)                                                   AS median_lag_days,
-    ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (
+    ))::NUMERIC, 2)                                                   AS median_lag_days,
+    ROUND((PERCENTILE_CONT(0.95) WITHIN GROUP (
         ORDER BY EXTRACT(EPOCH FROM (c.settled_at - c.captured_at)) / 86400.0
-    ), 2)                                                   AS p95_lag_days,
+    ))::NUMERIC, 2)                                                   AS p95_lag_days,
     MAX(EXTRACT(EPOCH FROM (c.settled_at - c.captured_at)) / 86400.0)
                                                             AS max_lag_days
 FROM captures c
