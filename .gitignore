@@ -18,3 +18,9 @@ Thumbs.db
 .env
 .env.local
 *.env
+
+# Node
+node_modules/
+
+# Maven
+target/
