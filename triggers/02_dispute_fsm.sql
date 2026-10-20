@@ -84,7 +84,7 @@ COMMENT ON TRIGGER trg_dispute_fsm ON disputes IS
 CREATE OR REPLACE VIEW v_dispute_fsm_transitions AS
 SELECT
     src.status AS from_status,
-    dst AS to_status
+    src.dst AS to_status
 FROM (
     VALUES
         ('RECEIVED'::dispute_status,           'UNDER_REVIEW'::dispute_status),
@@ -97,7 +97,7 @@ FROM (
         ('ARBITRATION',                         'WON'),
         ('ARBITRATION',                         'LOST')
 ) AS src(status, dst)
-ORDER BY src.status, dst;
+ORDER BY src.status, src.dst;
 
 COMMENT ON VIEW v_dispute_fsm_transitions IS
     'Self-documenting view of valid dispute state transitions.';
