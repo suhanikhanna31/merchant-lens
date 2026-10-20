@@ -18,32 +18,31 @@ SECURITY DEFINER          -- runs as function owner, captures correct user
 AS $$
 DECLARE
     v_record_id TEXT;
+    v_pk_col    TEXT;
     v_old_data  JSONB := NULL;
     v_new_data  JSONB := NULL;
 BEGIN
-    -- Extract the primary key value for the affected row.
-    -- We rely on the convention that every audited table has
-    -- a column named <table_singular>_id or 'id'.
-    -- We cast to TEXT for uniformity.
+    -- Look up the table's primary-key column from the catalog instead of
+    -- guessing a name from the table name (disputes -> dispute_id, not
+    -- disputes_id, which previously made every record_id 'UNKNOWN').
+    SELECT a.attname INTO v_pk_col
+    FROM   pg_index i
+    JOIN   pg_attribute a ON a.attrelid = i.indrelid
+                         AND a.attnum   = ANY (i.indkey)
+    WHERE  i.indrelid = TG_RELID
+      AND  i.indisprimary
+    LIMIT  1;
+
     IF TG_OP = 'DELETE' THEN
-        v_record_id := (row_to_json(OLD) ->> (TG_TABLE_NAME || '_id'));
-        IF v_record_id IS NULL THEN
-            v_record_id := (row_to_json(OLD) ->> 'id');
-        END IF;
-        v_old_data := to_jsonb(OLD);
+        v_old_data  := to_jsonb(OLD);
+        v_record_id := v_old_data ->> v_pk_col;
     ELSIF TG_OP = 'INSERT' THEN
-        v_record_id := (row_to_json(NEW) ->> (TG_TABLE_NAME || '_id'));
-        IF v_record_id IS NULL THEN
-            v_record_id := (row_to_json(NEW) ->> 'id');
-        END IF;
-        v_new_data := to_jsonb(NEW);
+        v_new_data  := to_jsonb(NEW);
+        v_record_id := v_new_data ->> v_pk_col;
     ELSE  -- UPDATE
-        v_record_id := (row_to_json(NEW) ->> (TG_TABLE_NAME || '_id'));
-        IF v_record_id IS NULL THEN
-            v_record_id := (row_to_json(NEW) ->> 'id');
-        END IF;
-        v_old_data := to_jsonb(OLD);
-        v_new_data := to_jsonb(NEW);
+        v_old_data  := to_jsonb(OLD);
+        v_new_data  := to_jsonb(NEW);
+        v_record_id := v_new_data ->> v_pk_col;
     END IF;
 
     INSERT INTO audit_log (
