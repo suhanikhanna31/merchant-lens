@@ -36,8 +36,7 @@ VALUES
     ('a1000000-0000-0000-0000-000000000005', 'Kotak Bank','KKBK0007890', '7412301234',     'Apollo Health Lifestyle', TRUE, NOW() - INTERVAL '200 days'),
     ('a1000000-0000-0000-0000-000000000006', 'PNB',       'PUNB0001234', '1234567890123',  'BPCL Retail Outlets', TRUE,    NOW() - INTERVAL '500 days'),
     ('a1000000-0000-0000-0000-000000000007', 'HDFC Bank', 'HDFC0005678', '50100987654321','Dmart Avenue Superstores', TRUE, NOW() - INTERVAL '300 days'),
-    ('a1000000-0000-0000-0000-000000000008', 'Yes Bank',  'YESB0009012', '0123456789012', 'Swiggy Bundl Technologies', TRUE, NOW() - INTERVAL '150 days')
-ON CONFLICT DO NOTHING;
+    ('a1000000-0000-0000-0000-000000000008', 'Yes Bank',  'YESB0009012', '0123456789012', 'Swiggy Bundl Technologies', TRUE, NOW() - INTERVAL '150 days');
 
 -- -----------------------------------------------------------
 -- Terminals (2 per merchant)
