@@ -18,6 +18,9 @@
 
   <properties>
     <java.version>17</java.version>
+    <!-- Override Boot-managed Tomcat: 11.0.24 is affected by CVE-2026-65637 (9.8) and others; fixed in 11.0.25+.
+         Remove once Spring Boot's managed Tomcat is >= 11.0.25. -->
+    <tomcat.version>11.0.25</tomcat.version>
     <!-- Raise to 0.70 once real tests exist (the pipeline's coverage gate) -->
     <jacoco.minimum>0.00</jacoco.minimum>
   </properties>
