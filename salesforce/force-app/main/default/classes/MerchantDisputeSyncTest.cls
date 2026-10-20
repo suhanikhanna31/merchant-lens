@@ -45,9 +45,9 @@ private class MerchantDisputeSyncTest {
         List<Case> cases = [SELECT Subject, Status, Priority, MerchantLens_Dispute_ID__c
                             FROM Case WHERE Origin = 'MerchantLens'];
         System.assertEquals(1, cases.size(), 'Expected one Case to be created');
-        System.assertEquals('In Progress', cases[0].Status);
-        System.assertEquals('High', cases[0].Priority);   // daysOpen = 11 > 5
-        System.assertEquals('D-001', cases[0].MerchantLens_Dispute_ID__c);
+        System.assertEquals('In Progress', cases[0].Status, 'UNDER_REVIEW should map to In Progress');
+        System.assertEquals('High', cases[0].Priority, 'daysOpen = 11 (> 5) should be High priority');
+        System.assertEquals('D-001', cases[0].MerchantLens_Dispute_ID__c, 'External ID should be copied from the dispute');
     }
 
     @isTest
@@ -90,6 +90,6 @@ private class MerchantDisputeSyncTest {
         Test.stopTest();
 
         Case c = [SELECT Status FROM Case WHERE MerchantLens_Dispute_ID__c = 'D-002'];
-        System.assertEquals('Closed', c.Status);
+        System.assertEquals('Closed', c.Status, 'WON should map to Closed');
     }
 }
