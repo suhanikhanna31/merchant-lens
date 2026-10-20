@@ -341,6 +341,9 @@ jobs:
     needs: [dast, salesforce-validate]
     if: github.ref == 'refs/heads/main'
     environment: staging
+    env:
+      SF_AUTH_URL: ${{ secrets.SF_AUTH_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -361,19 +364,39 @@ jobs:
           docker build -t ghcr.io/${{ github.repository }}/merchantlens-api:${{ github.sha }} ./java-api
           docker push ghcr.io/${{ github.repository }}/merchantlens-api:${{ github.sha }}
 
-      - name: Deploy Salesforce metadata to sandbox
+      - name: Install Salesforce CLI
+        if: env.SF_AUTH_URL != ''
+        run: npm install -g @salesforce/cli
+
+      - name: Authenticate to Salesforce sandbox
+        if: env.SF_AUTH_URL != ''
         run: |
+          AUTH_FILE="$(mktemp)"
+          printf '%s' "$SF_AUTH_URL" > "$AUTH_FILE"
+          sf org login sfdx-url \
+            --sfdx-url-file "$AUTH_FILE" \
+            --alias merchantlens-sandbox \
+            --set-default
+          rm -f "$AUTH_FILE"
+
+      - name: Deploy Salesforce metadata to sandbox
+        if: env.SF_AUTH_URL != ''
+        run: |
+          cd salesforce
           sf project deploy start \
-            --source-dir salesforce/force-app \
+            --source-dir force-app \
             --target-org merchantlens-sandbox \
             --test-level RunLocalTests
 
+      - name: Skip Salesforce deploy notice
+        if: env.SF_AUTH_URL == ''
+        run: echo "::warning::SF_AUTH_URL secret not set - skipping Salesforce deploy."
+
       - name: Notify Slack on deployment
+        if: env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.24.0
         with:
           payload: |
             {
               "text": "✅ MerchantLens deployed to staging — SHA: ${{ github.sha }}"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
