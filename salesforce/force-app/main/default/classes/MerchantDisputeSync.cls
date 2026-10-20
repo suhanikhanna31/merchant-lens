@@ -29,6 +29,9 @@ public with sharing class MerchantDisputeSync {
 
     // ─── Data Transfer Objects ────────────────────────────────────────────
 
+    // Field names intentionally mirror the snake_case keys of the MerchantLens JSON
+    // API, because JSON.deserialize maps keys to field names one-to-one.
+    @SuppressWarnings('PMD.FieldNamingConventions')
     public class DisputeDTO {
         @AuraEnabled public String  disputeId;
         @AuraEnabled public String  merchantId;
